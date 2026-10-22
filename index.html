@@ -1,0 +1,609 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>抽象語の感情価・覚醒価評定</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Single light theme on purpose: every participant sees the same white screen regardless of OS dark mode.
+   Layout: one centered task stage; word on top, 9-point scale, next button below */
+:root {
+  --bg: #ffffff;
+  --fg: #1d1f24;
+  --muted: #6a6f7a;
+  --line: #dfe2e8;
+  --cell: #f6f7f9;
+  --cell-hover: #eceef2;
+  --selected: #c8323c;
+  --selected-fg: #ffffff;
+  --accent: #c8323c;
+  --disabled: #e6e7eb;
+  --disabled-fg: #a0a4ad;
+  --font-body: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
+}
+:root { color-scheme: light; }
+html, body { min-height: 100%; }
+body {
+  /* jsPsych が body に width:100% を付けるので、左右の余白を幅の内側に含める（スマホで横にはみ出さないように） */
+  box-sizing: border-box;
+  background: var(--bg); color: var(--fg); font-family: var(--font-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+/* jsPsych は表示領域に height:100% を付けるが、長い説明文がはみ出してスクロールやタップが不安定になるため、高さは内容に合わせる */
+.jspsych-display-element { height: auto !important; min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; }
+.jspsych-content-wrapper { flex: 1; display: flex; align-items: center; justify-content: center; padding-block: 32px; }
+.jspsych-content { width: 100%; max-width: 900px; }
+
+.stage { display: flex; flex-direction: column; align-items: center; gap: 56px; text-align: center; }
+.word { font-family: var(--font-body); font-size: clamp(56px, 11vw, 88px); font-weight: 500; letter-spacing: 0.04em; line-height: 1.2; }
+.word.catch { font-size: clamp(20px, 4vw, 28px); font-weight: 500; letter-spacing: 0.02em; min-height: 2.4em; display: flex; align-items: center; text-wrap: balance; }
+.dim-label { font-size: 13px; color: var(--muted); letter-spacing: 0.08em; }
+.scale { display: grid; grid-template-columns: auto auto auto; grid-template-areas: "l p r"; justify-content: center; align-items: center; gap: 16px; max-width: 100%; }
+.anchor { font-size: 14px; color: var(--muted); white-space: nowrap; }
+.anchor.left { grid-area: l; text-align: right; }
+.anchor.right { grid-area: r; text-align: left; }
+.points { grid-area: p; display: grid; grid-template-columns: repeat(9, 56px); gap: 6px; }
+.pt {
+  font: inherit; font-size: 17px; font-variant-numeric: tabular-nums;
+  height: 48px; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--cell); color: var(--fg); cursor: pointer; transition: background .12s;
+}
+.pt:hover { background: var(--cell-hover); }
+.pt[aria-pressed="true"] { background: var(--selected); border-color: var(--selected); color: var(--selected-fg); }
+.pt:focus-visible, .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn {
+  font: inherit; font-size: 15px; padding: 10px 36px; border: 0; border-radius: 6px;
+  background: var(--accent); color: #fff; cursor: pointer;
+}
+.btn:disabled { background: var(--disabled); color: var(--disabled-fg); cursor: default; }
+.bar { width: min(320px, 100%); height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.bar span { display: block; height: 100%; background: var(--muted); }
+.keyhint { font-size: 12px; color: var(--muted); margin-top: -40px; }
+.progress { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.text { max-width: 36em; margin-inline: auto; text-align: left; line-height: 1.9; font-size: 16px; display: flex; flex-direction: column; gap: 14px; }
+.text h1 { font-size: 22px; margin: 0 0 4px; text-wrap: balance; }
+.text p { margin: 0; }
+.text h2 { font-size: 18px; margin: 14px 0 0; }
+.text ul { margin: 0; padding-left: 1.4em; }
+.checks { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+.check { display: grid; grid-template-columns: 22px 1fr; gap: 12px; align-items: start; padding: 14px 4px; border-bottom: 1px solid var(--line); cursor: pointer; }
+.check input, .radio input { width: 18px; height: 18px; margin: 5px 0 0; accent-color: var(--accent); }
+.q { border: 0; padding: 0; margin: 8px 0 0; display: flex; flex-direction: column; gap: 2px; }
+.q legend { font-weight: 700; padding: 0; margin-bottom: 6px; }
+.radio { display: grid; grid-template-columns: 22px 1fr; gap: 10px; align-items: start; padding: 4px; cursor: pointer; border-radius: 6px; }
+.radio:hover, .check:hover { background: var(--cell); }
+.numrow { display: flex; align-items: center; gap: 8px; }
+.numrow input { font: inherit; width: 5em; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg); font-variant-numeric: tabular-nums; }
+.numrow input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.hint { font-size: 13px; color: var(--muted); min-height: 1.5em; }
+.text .center { text-align: center; margin-top: 16px; }
+
+.result { width: 100%; display: flex; flex-direction: column; gap: 12px; text-align: left; }
+.result pre { max-height: 320px; overflow: auto; background: var(--cell); border: 1px solid var(--line); border-radius: 6px; padding: 12px; font-size: 12px; margin: 0; }
+
+@media (max-width: 860px) {
+  .scale { grid-template-columns: 1fr 1fr; grid-template-areas: "p p" "l r"; gap: 10px; width: 100%; }
+  .points { grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 4px; }
+  .pt { height: 44px; font-size: 15px; padding: 0; }
+  .anchor { font-size: 12px; }
+  .anchor.left { text-align: left; }
+  .anchor.right { text-align: right; }
+  .stage { gap: 40px; }
+}
+@media (prefers-reduced-motion: reduce) { .pt { transition: none; } }
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap">
+<script src="https://unpkg.com/jspsych@8.2.3/dist/index.browser.min.js"></script>
+
+</head>
+<body>
+<script>
+/* ============================================================
+   設定
+   ============================================================ */
+const CONFIG = {
+  // DataPipe の Experiment ID。空のままならデモモード（データは送信せず画面に表示）
+  DATAPIPE_ID: "",
+  // 感情価・覚醒価で同じ単語リストを使用
+  WORDS: `原理 局面 動向 論点 因果 便宜 概念 論理 比重 抽象 措置 道理 形式 学説 本質 方式 比率 観念 名目 要因
+要素 様式 妥当 是非 定義 手法 理論 対比 程度 趣旨 見解 前提 構造 典型 形態 関連 尺度 事態 作用 相違
+事例 数量 必然 区分 特性 意義 頻度 仮定 上限 文脈 根拠 性質 現象 機能 過程 分類 中立 領域 恩義 美徳
+良識 博愛 尊厳 敬愛 寛容 自負 連帯 慈悲 功績 品格 向上 忠誠 誠意 虚偽 悪徳 懸念 悲観 不正 惨事 過失
+中傷 無情 憤慨`.split(/\s+/).filter(Boolean),
+  // 研究の説明文（同意画面の前に表示）。【　】は未確定の箇所
+  INFO: `<h1>研究へのご協力のお願い</h1>
+    <p><strong>研究課題名</strong>：抽象語の感情価・覚醒度に関する評定調査<br>
+    <strong>研究実施者</strong>：東北大学大学院医学系研究科　加齢医学研究所 人間脳科学研究分野　博士後期課程4年　髙橋一也<br>
+    <strong>指導教員</strong>：東北大学大学院医学系研究科　加齢医学研究所 人間脳科学研究分野　杉浦 元亮</p>
+    <h2>1. 研究の目的</h2>
+    <p>この研究では、さまざまな言葉が人に与える印象を調べています。今回の調査では、抽象的な意味をもつ言葉について、「快・不快の感じ」と「気持ちの高ぶりの強さ」を評定していただきます。得られたデータは、言葉の意味と記憶の関係を調べる研究の基礎資料として使用します。</p>
+    <h2>2. 参加いただける方</h2>
+    <p>18歳以上で、日本語を母語とする方を対象としています。</p>
+    <h2>3. 調査の内容と所要時間</h2>
+    <p>最初に、年齢・性別・母語・利き手についての簡単な質問にお答えいただきます。その後、2つのパートで、画面に表示される言葉の印象を1〜9の9段階で評定していただきます。所要時間は全体で15分程度です。</p>
+    <p>できるだけPCまたはスマートフォンをご利用いただき、静かな環境で回答してください。</p>
+    <h2>4. 参加は自由です</h2>
+    <p>この調査への参加は、あなたの自由な意思によるものです。参加しないことを選んでも、不利益を受けることは一切ありません。回答の途中でも、ブラウザのタブを閉じることで、理由を述べずにいつでも参加を取りやめることができます。途中で取りやめた場合、それまでの回答の一部が保存されることがありますが、【その回答は分析に使用しません】。</p>
+    <h2>5. 匿名性について</h2>
+    <p>この調査では、氏名・メールアドレス・所属など、あなたを特定できる情報は一切収集しません。回答はランダムな番号で管理されます。そのため、回答を送信した後に、ご自身の回答を撤回・削除することはできません。あらかじめご了承ください。</p>
+    <h2>6. データの管理</h2>
+    <p>回答データは、研究実施者のみがアクセスできるオンラインの保管場所（Google ドライブ。米国の Google 社が運営）に保存します。データは【東北大学の規程に従い、研究終了後〇年間】保管した後、適切に廃棄します。【研究成果の発表後、個人が特定できない形でデータを公開することがあります。】</p>
+    <h2>7. 予想される負担と不利益</h2>
+    <p>15分程度の時間をいただくこと以外に、大きな負担は想定していません。ただし、評定する言葉の中には、ネガティブな意味をもつ言葉も一部含まれます。不快に感じた場合は、いつでも回答を中止してかまいません。</p>
+    <h2>8. 謝礼</h2>
+    <p>【謝礼はありません。】</p>
+    <h2>9. 研究成果の公表</h2>
+    <p>研究の成果は、博士論文、学会発表、学術論文として公表する予定です。公表の際に、個人が特定されることはありません。</p>
+    <h2>10. 倫理審査</h2>
+    <p>この研究は、【東北大学応用認知神経科学センター MRI研究倫理委員会】の承認を得て実施しています（承認番号：【〇〇〇〇】）。</p>
+    <h2>11. お問い合わせ</h2>
+    <p>この研究についてご質問がある場合は、下記までご連絡ください。<br>
+    研究実施者：髙橋一也<br>
+    メール：【takahashi.kazuya.s4@dc.tohoku.ac.jp】</p>
+    <p>以上の説明をお読みいただき、参加に同意いただける場合は、「次へ」を押して同意画面に進んでください。</p>`,
+  // 同意項目（Gorillaの英語版を日本語化）
+  CONSENT_ITEMS: [
+    "研究についての説明を読んで理解し、質問する機会がありました。",
+    "ブラウザのタブを閉じることで、理由を述べることなく、いつでも研究への参加を取りやめられることを理解しました。",
+    "この研究に参加することに同意します。"
+  ],
+  // 対象年齢の下限。これ未満の年齢を入力した人は、データを保存せずに終了する
+  MIN_AGE: 18,
+  // 参加者情報のアンケート（id がCSVの列名になる）
+  SURVEY: [
+    { id: "age", label: "年齢", type: "number", min: 1, max: 99 },
+    { id: "gender", label: "性別", options: ["男性", "女性", "その他", "答えたくない"] },
+    { id: "native_japanese", label: "日本語が母語ですか？", options: ["はい", "いいえ"] },
+    { id: "handedness", label: "利き手", options: ["右", "左", "両方", "わからない"] }
+  ],
+  // 練習試行（刺激リスト・教示の例に含まれない語）。各パートの教示の後に、毎回ランダムな順で提示
+  PRACTICE: ["方針", "希望", "不安"],
+  // キャッチ試行（各ブロックに1回ずつ、ランダムな位置に挿入）
+  CATCH: [
+    { id: "left",   answer: 1, text: "＜この問いは いちばん左（1）を選んでください＞" },
+    { id: "right3", answer: 7, text: "＜この問いは 右から3番目（7）を選んでください＞" },  // 中央(5)は選ばれやすいので避ける
+    { id: "right",  answer: 9, text: "＜この問いは いちばん右（9）を選んでください＞" },
+    { id: "third",  answer: 3, text: "＜この問いは 左から3番目（3）を選んでください＞" }
+  ],
+  // 各次元の教示。カウンターバランスのため、1つ目に来た場合と2つ目に来た場合で冒頭文だけを切り替える
+  DIMENSIONS: {
+    valence: {
+      name: "感情価",
+      left: "とてもネガティブ",
+      right: "とてもポジティブ",
+      opening: {
+        first: `<p>これから、いくつかの言葉を一つずつ見ていただきます。</p>`,
+        second: `<p>次に、同じ言葉について「感情価」を評定していただきます。</p>`
+      },
+      body: `<p>それぞれの言葉を見たときに、<strong>あなた自身がどう感じたか</strong>を評定してください。世間一般や社会的にどう評価されているかではなく、あなた自身の感じ方で答えてください。</p>
+        <h2>感情価とは</h2>
+        <p>その言葉に対して感じる <strong>不快（ネガティブ）〜 快（ポジティブ）</strong> の程度です。</p>
+        <ul>
+          <li><strong>ネガティブ</strong> … 不快・いや・望ましくないと感じる（例：怒り、悲しみ、苦しみ）</li>
+          <li><strong>ポジティブ</strong> … 快い・うれしい・望ましいと感じる（例：喜び、楽しさ）</li>
+          <li><strong>どちらでもない</strong> … 快でも不快でもない中立的な感じ</li>
+        </ul>
+        <h2>答え方</h2>
+        <p>下の <strong>9段階</strong> から、あなたの感じ方に最も近いものを一つ選んでください。</p>
+        <ul>
+          <li>左端（<strong>1</strong>）＝ とてもネガティブ</li>
+          <li>中央（<strong>5</strong>）＝ どちらでもない</li>
+          <li>右端（<strong>9</strong>）＝ とてもポジティブ</li>
+        </ul>
+        <p><strong>数値が大きいほどポジティブ</strong>になります。中間の数字も選べます。</p>
+        <p>正解・不正解はありません。<strong>深く考え込まず、直感で、できるだけ速く</strong>答えてください。</p>`
+    },
+    arousal: {
+      name: "覚醒度",
+      left: "とても沈静（平静）",
+      right: "とても覚醒（興奮）",
+      opening: {
+        first: `<p>これから、いくつかの言葉を一つずつ見ていただき、「覚醒度」を評定していただきます。</p>`,
+        second: `<p>次に、同じ言葉について「覚醒度」を評定していただきます。</p>`
+      },
+      body: `<p>それぞれの言葉を見たときに、<strong>あなた自身がどう感じたか</strong>を評定してください。世間一般や社会的にどう評価されているかではなく、あなた自身の感じ方で答えてください。</p>
+        <p><strong>覚醒度</strong> とは、その言葉を見たときに <strong>心や体がどれだけ活性化する（ざわつく・高ぶる）か</strong> の程度です。</p>
+        <h2>覚醒度とは</h2>
+        <ul>
+          <li><strong>覚醒が高い</strong> … ドキドキ・ハラハラ・ワクワクするような、興奮・緊張した感じ</li>
+          <li><strong>覚醒が低い（沈静）</strong> … 落ち着いた・静かな・沈静した感じ</li>
+        </ul>
+        <h2>重要：感情価とは独立です</h2>
+        <p>覚醒度は感情価とは <strong>独立</strong> です。ポジティブでも高覚醒（例：情熱）のことも低覚醒（例：平和）のこともあり、ネガティブでも高覚醒（例：虐待）のことも低覚醒（例：孤独）のこともあります。快・不快とは別に、<strong>活性化の強さだけ</strong>で判断してください。</p>
+        <h2>答え方</h2>
+        <p>下の <strong>9段階</strong> から、あなたの感じ方に最も近いものを一つ選んでください。</p>
+        <ul>
+          <li>左端（<strong>1</strong>）＝ とても沈静（平静）</li>
+          <li>中央（<strong>5</strong>）＝ 中程度</li>
+          <li>右端（<strong>9</strong>）＝ とても覚醒（興奮）</li>
+        </ul>
+        <p><strong>数値が大きいほど覚醒が高く</strong>なります。中間の数字も選べます。</p>
+        <p>正解・不正解はありません。<strong>直感で、できるだけ速く</strong>答えてください。</p>`
+    }
+  }
+};
+
+/* ============================================================
+   参加者ID（完全匿名のため、参加者には入力させず内部で自動生成する）
+   ============================================================ */
+const params = new URLSearchParams(location.search);
+const participantId = "anon_" + (crypto.randomUUID ? crypto.randomUUID().slice(0, 8) : Math.random().toString(36).slice(2, 10));
+const demoMode = !CONFIG.DATAPIPE_ID;
+
+/* 端末の種類（スマホ / タブレット / PC）
+   ブラウザが教えてくれる情報（userAgentData・UA文字列・タッチ点数・画面サイズ）から判定する */
+const DEVICE = (() => {
+  const ua = navigator.userAgent;
+  const touchPoints = navigator.maxTouchPoints || 0;
+  const coarse = matchMedia("(pointer: coarse)").matches;
+  const uadMobile = navigator.userAgentData ? navigator.userAgentData.mobile : null;
+  const shortSide = Math.min(screen.width, screen.height);
+  let type = "pc";
+  if (uadMobile === true || /iPhone|iPod/.test(ua) || (/Android/.test(ua) && /Mobile/.test(ua))) type = "smartphone";
+  else if (/iPad/.test(ua) || (/Macintosh/.test(ua) && touchPoints > 1) || (/Android/.test(ua) && !/Mobile/.test(ua))) type = "tablet";
+  else if (coarse && shortSide < 500) type = "smartphone";
+  return { type, touchPoints, coarse };
+})();
+
+/* ============================================================
+   評定試行のカスタムプラグイン（選択 →「次へ」で確定）
+   ============================================================ */
+class RatingPlugin {
+  static info = {
+    name: "word-rating",
+    version: "1.0.0",
+    parameters: {
+      word: { type: jsPsychModule.ParameterType.STRING, default: "" },
+      dimension: { type: jsPsychModule.ParameterType.STRING, default: "valence" },
+      progress: { type: jsPsychModule.ParameterType.FLOAT, default: 0 },
+      isCatch: { type: jsPsychModule.ParameterType.BOOL, default: false },
+      isPractice: { type: jsPsychModule.ParameterType.BOOL, default: false }
+    },
+    data: {}
+  };
+  constructor(jsPsych) { this.jsPsych = jsPsych; }
+  trial(el, trial) {
+    const d = CONFIG.DIMENSIONS[trial.dimension];
+    const pts = Array.from({ length: 9 }, (_, i) =>
+      `<button class="pt" type="button" id="pt${i + 1}" data-v="${i + 1}" aria-pressed="false">${i + 1}</button>`).join("");
+    el.innerHTML = `
+      <div class="stage">
+        <div class="dim-label">${trial.isPractice ? "練習　" : ""}${d.name}</div>
+        <div class="word${trial.isCatch ? " catch" : ""}">${trial.word}</div>
+        <div class="scale">
+          <span class="anchor left">${d.left}</span>
+          <div class="points" role="group" aria-label="${d.name} 1〜9">${pts}</div>
+          <span class="anchor right">${d.right}</span>
+        </div>
+        <button class="btn" id="next" type="button" disabled>次へ</button>
+        ${DEVICE.type === "pc" ? `<div class="keyhint">キーボードの 1〜9 でも選べます。Enter で次へ進みます。</div>` : ""}
+        <div class="bar" ${trial.isPractice ? "hidden" : ""} role="progressbar" aria-label="進み具合" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(trial.progress * 100)}"><span style="width:${(trial.progress * 100).toFixed(1)}%"></span></div>
+      </div>`;
+    // --- 時間の起点：単語が実際に画面に描かれたフレームにそろえる ---
+    // innerHTML を入れた直後はまだ描画されていない。次のフレームの描画タイミング（rAF）を起点にする
+    const tScript = performance.now();
+    let t0 = tScript, onsetDelay = null;
+    requestAnimationFrame(() => { t0 = performance.now(); onsetDelay = Math.round(t0 - tScript); });
+
+    let rating = null, firstRt = null, firstInput = null, changes = 0, done = false;
+    const nextBtn = el.querySelector("#next");
+    const choose = (v, input) => {
+      if (done) return;
+      const now = performance.now();
+      if (firstRt === null) { firstRt = Math.round(now - t0); firstInput = input; }
+      else if (v !== rating) changes++;
+      rating = v;
+      el.querySelectorAll(".pt").forEach(x => x.setAttribute("aria-pressed", Number(x.dataset.v) === v ? "true" : "false"));
+      nextBtn.disabled = false;
+    };
+    const submit = (input) => {
+      if (done || rating === null) return;
+      done = true;
+      document.removeEventListener("keydown", onKey);
+      this.jsPsych.finishTrial({
+        word: trial.word,
+        dimension: trial.dimension,
+        rating,
+        rt_first_choice: firstRt,
+        rt_submit: Math.round(performance.now() - t0),
+        n_changes: changes,
+        first_choice_input: firstInput,   // keyboard / mouse / touch / pen
+        submit_input: input,
+        onset_delay_ms: onsetDelay        // 処理から実際の描画までのずれ（参考値）
+      });
+    };
+    // マウス・タッチ・ペン：PointerEvent の pointerType で判別（キーボードでボタンを押した場合は detail=0）
+    const inputOf = e => (e.detail === 0 ? "keyboard" : (e.pointerType || "mouse"));
+    el.querySelectorAll(".pt").forEach(b => b.addEventListener("click", e => choose(Number(b.dataset.v), inputOf(e))));
+    nextBtn.addEventListener("click", e => submit(inputOf(e)));
+    // キーボード：数字キー（上段・テンキー）で選択、Enter で次へ。日本語入力がオンでも効くよう e.code で判定
+    const onKey = e => {
+      if (e.repeat) return;
+      const m = /^(?:Digit|Numpad)([1-9])$/.exec(e.code);
+      if (m) { e.preventDefault(); choose(Number(m[1]), "keyboard"); }
+      else if (e.key === "Enter") { e.preventDefault(); submit("keyboard"); }
+    };
+    document.addEventListener("keydown", onKey);
+  }
+}
+
+/* 文章を出してボタンで進むだけの画面 */
+class TextPlugin {
+  static info = {
+    name: "text-screen",
+    version: "1.0.0",
+    parameters: {
+      html: { type: jsPsychModule.ParameterType.HTML_STRING, default: "" },
+      button: { type: jsPsychModule.ParameterType.STRING, default: "次へ" }
+    },
+    data: {}
+  };
+  constructor(jsPsych) { this.jsPsych = jsPsych; }
+  trial(el, trial) {
+    el.innerHTML = `<div class="text">${trial.html}
+      <div class="center"><button class="btn" id="go" type="button">${trial.button}</button></div></div>`;
+    el.querySelector("#go").addEventListener("click", () => {
+      this.jsPsych.finishTrial({});
+    });
+  }
+}
+
+/* 同意画面：3項目すべてにチェックすると「次へ」が押せる */
+class ConsentPlugin {
+  static info = { name: "consent", version: "1.0.0", parameters: {}, data: {} };
+  constructor(jsPsych) { this.jsPsych = jsPsych; }
+  trial(el) {
+    const items = CONFIG.CONSENT_ITEMS.map((t, i) => `
+      <label class="check" for="c${i}"><input type="checkbox" id="c${i}"><span>${t}</span></label>`).join("");
+    el.innerHTML = `<div class="text">
+      <h1>研究参加への同意</h1>
+      <p>以下の各項目をよく読み、該当するものすべてにチェックを入れてください。</p>
+      <div class="checks">${items}</div>
+      <div class="center"><button class="btn" id="go" type="button" disabled>次へ</button></div></div>`;
+    const boxes = [...el.querySelectorAll("input[type=checkbox]")];
+    const go = el.querySelector("#go");
+    boxes.forEach(b => b.addEventListener("change", () => { go.disabled = !boxes.every(x => x.checked); }));
+    go.addEventListener("click", () => {
+      const t = new Date().toISOString();
+      this.jsPsych.data.addProperties({ consent: true, consent_time: t });
+      this.jsPsych.finishTrial({ task: "consent" });
+    });
+  }
+}
+
+/* 参加者情報のアンケート：すべて回答すると「次へ」が押せる */
+class SurveyPlugin {
+  static info = { name: "demographics", version: "1.0.0", parameters: {}, data: {} };
+  constructor(jsPsych) { this.jsPsych = jsPsych; }
+  trial(el) {
+    const qs = CONFIG.SURVEY.map(q => q.type === "number" ? `
+      <fieldset class="q"><legend><label for="${q.id}">${q.label}</label></legend>
+        <div class="numrow"><input id="${q.id}" name="${q.id}" type="text" inputmode="numeric" autocomplete="off" maxlength="3"><span>歳</span></div>
+        <p class="hint" id="${q.id}_msg">数字で入力してください。</p>
+      </fieldset>` : `
+      <fieldset class="q"><legend>${q.label}</legend>
+        ${q.options.map((o, i) => `<label class="radio" for="${q.id}${i}">
+          <input type="radio" name="${q.id}" id="${q.id}${i}" value="${o}"><span>${o}</span></label>`).join("")}
+      </fieldset>`).join("");
+    el.innerHTML = `<div class="text"><h1>あなたについて</h1>
+      <p>以下の質問にお答えください。</p>${qs}
+      <div class="center"><button class="btn" id="go" type="button" disabled>次へ</button></div></div>`;
+    const go = el.querySelector("#go");
+    // 全角数字も受け付ける
+    const toNum = v => { const t = String(v || "").trim().replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)); return /^\d{1,3}$/.test(t) ? Number(t) : NaN; };
+    const answers = () => Object.fromEntries(CONFIG.SURVEY.map(q => [q.id, q.type === "number"
+      ? toNum(el.querySelector(`#${q.id}`).value)
+      : (el.querySelector(`input[name="${q.id}"]:checked`) || {}).value]));
+    const check = () => {
+      const a = answers();
+      let ok = true;
+      CONFIG.SURVEY.forEach(q => {
+        if (q.type === "number") {
+          const v = a[q.id], msg = el.querySelector(`#${q.id}_msg`);
+          const valid = Number.isInteger(v) && v >= q.min && v <= q.max;
+          msg.textContent = el.querySelector(`#${q.id}`).value === "" ? "数字で入力してください。"
+            : valid ? "" : `${q.min}〜${q.max}の数字で入力してください。`;
+          if (!valid) ok = false;
+        } else if (!a[q.id]) ok = false;
+      });
+      go.disabled = !ok;
+    };
+    el.addEventListener("input", check);
+    el.addEventListener("change", check);
+    go.addEventListener("click", () => {
+      const a = answers();
+      // 対象年齢未満の場合は、データを保存せずに終了する
+      if (a.age < CONFIG.MIN_AGE) {
+        this.jsPsych.abortExperiment(`<div class="text"><h1>ご関心をお寄せいただき、ありがとうございました</h1>
+          <p>この調査は${CONFIG.MIN_AGE}歳以上の方を対象としています。申し訳ありませんが、ご参加いただくことができません。</p>
+          <p>このウィンドウを閉じてください。</p></div>`);
+        return;
+      }
+      this.jsPsych.data.addProperties(a);
+      this.jsPsych.finishTrial({ task: "demographics" });
+    });
+  }
+}
+
+/* ============================================================
+   実験の組み立て
+   ============================================================ */
+const jsPsych = initJsPsych({});
+/* カウンターバランス（同一URLで配布）
+   1) URLに ?order=VA / ?order=AV があればそれに従う（手動で指定したいとき用）
+   2) なければ DataPipe の条件割り当て機能で、開いた人に順番に 0,1,0,1… を割り当てる（Gorillaの balanced と同じ考え方）
+   3) デモモード、または通信に失敗したときはランダム */
+const ORDERS = { VA: ["valence", "arousal"], AV: ["arousal", "valence"] };
+let order = { code: "VA", source: "pending" };
+async function assignOrder() {
+  const q = (params.get("order") || "").toUpperCase();
+  if (ORDERS[q]) return { code: q, source: "url" };
+  if (!demoMode) {
+    try {
+      const res = await fetch("https://pipe.jspsych.org/api/condition/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "*/*" },
+        body: JSON.stringify({ experimentID: CONFIG.DATAPIPE_ID })
+      });
+      const c = Number((await res.json()).condition);
+      // 条件数が2以外に設定されていても VA/AV が交互になるよう、偶数→VA・奇数→AV とする
+      if (Number.isInteger(c) && c >= 0) return { code: c % 2 === 0 ? "VA" : "AV", source: "datapipe_balanced" };
+    } catch (e) { /* ランダムにフォールバック */ }
+  }
+  return { code: Math.random() < 0.5 ? "VA" : "AV", source: "random" };
+}
+jsPsych.data.addProperties({
+  participant_id: participantId,
+  start_time: new Date().toISOString(),
+  screen_w: screen.width,
+  screen_h: screen.height,
+  window_w: innerWidth,
+  window_h: innerHeight,
+  touch_device: DEVICE.coarse,
+  device_type: DEVICE.type,
+  max_touch_points: DEVICE.touchPoints,
+  user_agent: navigator.userAgent
+});
+
+const timeline = [];
+const TOTAL = 2 * (CONFIG.WORDS.length + CONFIG.CATCH.length);
+timeline.push({
+  type: TextPlugin, button: "次へ",
+  html: `${demoMode ? `<p class="dim-label">デモモード：データは送信されず、最後に画面に表示されます。</p>` : ""}${CONFIG.INFO}`
+});
+
+// 両方の順序のタイムラインを作っておき、参加者ごとにどちらか一方だけを実行する
+function buildBlocks(code) {
+  const tl = [];
+  let done = 0;
+  ORDERS[code].forEach((dim, bi) => {
+  const d = CONFIG.DIMENSIONS[dim];
+  tl.push({
+    type: TextPlugin, button: "練習をはじめる",
+    html: `<h1>パート${bi + 1}／2</h1>${d.opening[bi === 0 ? "first" : "second"]}${d.body}
+      <p>はじめに、${CONFIG.PRACTICE.length}つの言葉で練習をします。</p>
+      ${DEVICE.type === "pc" ? `<p>数字はマウスでクリックするほか、キーボードの <strong>1〜9キー</strong>でも選べます。<strong>Enterキー</strong>で次へ進みます。</p>` : ""}`
+  });
+  jsPsych.randomization.shuffle(CONFIG.PRACTICE).forEach((w, pi) => tl.push({
+    type: RatingPlugin, word: w, dimension: dim, isPractice: true,
+    data: { block: bi + 1, trial_in_block: pi + 1, task: "practice" }
+  }));
+  tl.push({
+    type: TextPlugin, button: "本番をはじめる",
+    html: `<h1>練習は終わりです</h1><p>ここから本番です。練習と同じように、<strong>${d.name}</strong>を評定してください。</p>`
+  });
+  // 単語試行とキャッチ試行を混ぜる。キャッチは区間ごとに1問ずつ散らす
+  const words = jsPsych.randomization.shuffle(CONFIG.WORDS);
+  const items = words.map(w => ({ kind: "rating", word: w }));
+  const catches = jsPsych.randomization.shuffle(CONFIG.CATCH);
+  const seg = Math.floor(items.length / catches.length);
+  // 後ろから挿入して位置がずれないようにする。各区間の先頭3試行は避ける
+  for (let k = catches.length - 1; k >= 0; k--) {
+    const pos = k * seg + 3 + Math.floor(Math.random() * (seg - 3));
+    items.splice(pos, 0, { kind: "catch", ...catches[k] });
+  }
+  items.forEach((it, wi) => tl.push(it.kind === "rating" ? {
+    type: RatingPlugin, word: it.word, dimension: dim,
+    progress: (done + wi) / TOTAL,
+    data: { block: bi + 1, trial_in_block: wi + 1, task: "rating" }
+  } : {
+    type: RatingPlugin, word: it.text, isCatch: true, dimension: dim,
+    progress: (done + wi) / TOTAL,
+    data: { block: bi + 1, trial_in_block: wi + 1, task: "catch", catch_id: it.id, correct_answer: it.answer },
+    on_finish: d => { d.catch_correct = d.rating === d.correct_answer; }
+  }));
+  done += items.length;
+  if (bi === 0) tl.push({
+    type: TextPlugin, button: "パート2へ進む",
+    html: `<h1>パート1が終わりました</h1><p>少し休憩してから、次のパートに進んでください。</p>`,
+    // 途中離脱に備えて、パート1の時点で一度保存する（失敗しても先に進める）
+    on_start: () => { if (!demoMode) saveData("part1"); }
+  });
+});
+  return tl;
+}
+timeline.push({ type: ConsentPlugin });
+timeline.push({ type: SurveyPlugin });
+
+["VA", "AV"].forEach(code => timeline.push({
+  timeline: buildBlocks(code),
+  conditional_function: () => order.code === code
+}));
+
+/* データ保存（DataPipe → Google ドライブ） */
+async function saveData(label = "complete") {
+  const csv = jsPsych.data.get().filter([{ task: "rating" }, { task: "catch" }])
+    .ignore(["trial_type", "plugin_version", "internal_node_id", "time_elapsed"]).csv();
+  if (demoMode) return { ok: true, csv };
+  try {
+    const res = await fetch("https://pipe.jspsych.org/api/data/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "*/*" },
+      body: JSON.stringify({
+        experimentID: CONFIG.DATAPIPE_ID,
+        filename: `${participantId}_${label}_${Date.now()}.csv`,
+        data: csv
+      })
+    });
+    return { ok: res.ok, csv };
+  } catch (e) { return { ok: false, csv }; }
+}
+
+function catchSummary() {
+  const c = jsPsych.data.get().filter({ task: "catch" });
+  return `${c.filter({ catch_correct: true }).count()} / ${c.count()}`;
+}
+
+timeline.push({
+  type: class {
+    static info = { name: "finish", version: "1.0.0", parameters: {}, data: {} };
+    constructor(jsPsych) { this.jsPsych = jsPsych; }
+    // jsPsych 8 では trial() が Promise を返すと、解決した時点で試行（＝実験）が終わり画面が消える。
+    // 終了画面を残すため、保存処理は別の async 関数で行い、trial() 自体は何も返さない
+    trial(el) { this.show(el); }
+    async show(el) {
+      el.innerHTML = `<div class="text"><p class="center">データを保存しています…</p></div>`;
+      const r = await saveData();
+      if (demoMode) {
+        el.innerHTML = `<div class="result">
+          <h1 style="font-size:22px;margin:0">デモ終了</h1>
+          <p style="margin:0">本番では、このCSVがGoogle ドライブに自動保存されます。</p>
+          <p style="margin:0">キャッチ試行の正答：<strong>${catchSummary()}</strong></p>
+          <pre id="csv"></pre>
+          <div><button class="btn" id="copy" type="button">CSVをコピー</button> <span id="msg" class="progress"></span></div>
+        </div>`;
+        el.querySelector("#csv").textContent = r.csv;
+        el.querySelector("#copy").addEventListener("click", () => {
+          navigator.clipboard.writeText(r.csv)
+            .then(() => el.querySelector("#msg").textContent = "コピーしました")
+            .catch(() => {
+              const range = document.createRange(); range.selectNodeContents(el.querySelector("#csv"));
+              const s = getSelection(); s.removeAllRanges(); s.addRange(range);
+              el.querySelector("#msg").textContent = "選択した状態です。Ctrl+C／⌘+Cでコピーしてください";
+            });
+        });
+      } else if (r.ok) {
+        el.innerHTML = `<div class="text"><h1 style="text-align:center;font-size:28px;font-weight:500">ご協力ありがとうございました</h1><p style="text-align:center">回答は保存されました。このウィンドウを閉じてください。</p></div>`;
+      } else {
+        el.innerHTML = `<div class="text"><h1>保存に失敗しました</h1>
+          <p>通信エラーで回答を保存できませんでした。ウィンドウを閉じずに、下のボタンでもう一度お試しください。</p>
+          <div class="center"><button class="btn" id="retry" type="button">もう一度保存する</button></div></div>`;
+        el.querySelector("#retry").addEventListener("click", () => this.show(el));
+      }
+    }
+  }
+});
+
+// 順序を決めてから実験を開始する
+(async () => {
+  order = await assignOrder();
+  jsPsych.data.addProperties({ block_order: order.code, order_source: order.source });
+  jsPsych.run(timeline);
+})();
+</script>
+
+</body>
+</html>
